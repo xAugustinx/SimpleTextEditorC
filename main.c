@@ -7,7 +7,6 @@
 #define byte unsigned char
 #define TRUE 1
 #define FALSE 0
-
 #define ilosLini 50
 #define standardowyPlik "./main.d"
 
@@ -20,16 +19,16 @@ int klawisz = 0;
 byte turnON = TRUE;
 char HOMEMode = 0;
 
-byte czyWpisany = 0;
+byte czyWpisany = 1;
 byte czyNowyWpisany = 1;
 char * plikWybranyPrzyOtwarciu;
 byte czyPrzyOtwarciuZostalWybrany = 0;
 
 void przygotujTerminal() {
     struct termios t;
-    tcgetattr(STDIN_FILENO, &t);           // Pobierz aktualne ustawienia
-    t.c_lflag &= ~(ICANON | ECHO);         // Wyłącz tryb kanoniczny i echo
-    tcsetattr(STDIN_FILENO, TCSANOW, &t);  // Zastosuj zmiany natychmiast
+    tcgetattr(STDIN_FILENO, &t);       
+    t.c_lflag &= ~(ICANON | ECHO);       
+    tcsetattr(STDIN_FILENO, TCSANOW, &t);  
 }
 
 void * wieczneSczytywanie(void * arg)
@@ -211,23 +210,15 @@ int main(int argc, char *qrgv[])
         for (byte i = 0; i < rozmiar; i++) pierwszyArgument[i] = qrgv[1][i];
 
         plikKodu = fopen(pierwszyArgument, "r");
-
         czyPrzyOtwarciuZostalWybrany = TRUE;
-
         plikWybranyPrzyOtwarciu = malloc(sizeof(pierwszyArgument)+1 * sizeof(char) );
 
-        for (int i = 1; i < sizeof(pierwszyArgument)+1; i++)
-        {
-            plikWybranyPrzyOtwarciu[i] = pierwszyArgument[i-1];
-        }
-
+        for (int i = 1; i < sizeof(pierwszyArgument)+1; i++) plikWybranyPrzyOtwarciu[i] = pierwszyArgument[i-1];
     }
     else { plikKodu = fopen(standardowyPlik,"r");}
     
-
     fseek(plikKodu, 0, SEEK_END);
     rozmiarTablicy = ftell(plikKodu)+1;
-
     plikWFormieTablicyChar = malloc(rozmiarTablicy * sizeof(char) );
 
     for (int i = 0; i < rozmiarTablicy+1; i++){
