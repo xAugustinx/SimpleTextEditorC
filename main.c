@@ -4,7 +4,6 @@
 #include <pthread.h>
 #include <termios.h>
 #include <unistd.h>
-
 #define byte unsigned char
 #define TRUE 1
 #define FALSE 0
@@ -16,18 +15,14 @@ byte turnON = TRUE;
 byte czyAkuratZostalWpisany = TRUE;
 int klawisz = 0;
 byte HOMEMode = 0;
-
 //plik
 FILE * plikKodu;
 int rozmiarPliku;
-
 //blokada
 pthread_mutex_t blokada;
-
 //linia itd
 int aktualnyZnak = 1;
 int aktualnaLinia = 0;
-
 //tablice Dynamiczne
 char * plikWTablicy;
 char * plikWybranyPrzyOtwarciu;
@@ -89,6 +84,26 @@ void przygotujTerminal() {
     tcsetattr(STDIN_FILENO, TCSANOW, &t);  
 }
 
+void zapisaniePliku()
+{
+    FILE * plikDoZpaisu;
+    char buffor[50];
+    if (czyPrzyOtwarciuZostalWybrany) {
+        plikDoZpaisu = fopen(plikWybranyPrzyOtwarciu, "w");
+    }
+    else
+    {
+        printf("Nowa nazwa pliku: \n");
+        scanf("%s",buffor);
+        plikDoZpaisu = fopen(buffor, "w");
+    }
+    
+
+    for (int i = 1; i < rozmiarPliku; i++) fprintf(plikDoZpaisu, "%c", plikWTablicy[i]);
+
+    fclose(plikDoZpaisu);
+    
+}
 
 void *wieczneSczytywanie(void * arg)
 {
@@ -110,7 +125,7 @@ void *wieczneSczytywanie(void * arg)
 
             if (klawisz == 258 && aktualnyZnak < rozmiarPliku ) {
                 aktualnyZnak++;
-                if (plikWTablicy[aktualnyZnak] == '\n') aktualnaLinia++;
+                if (plikWTablicy[aktualnyZnak-1] == '\n') aktualnaLinia++;
             }
             else if (klawisz == 256 && aktualnaLinia > 0) {
                 for (int i = aktualnyZnak-1; i > 0; i--) if (plikWTablicy[i] == '\n' || i == 1) 
@@ -126,19 +141,22 @@ void *wieczneSczytywanie(void * arg)
                 aktualnyZnak--;
                 if (plikWTablicy[aktualnyZnak] == '\n') aktualnaLinia--;
             }
+            else if (klawisz == 17) {turnON = FALSE; break;}
+            else if (klawisz == 19) zapisaniePliku();
 
             czyAkuratZostalWpisany = TRUE;
         }
         else
         {
-            char bufor[100];
             system("clear");
             printf("\033[1;33m%s", "s/o - zapisz\nq - wyjdź \n");
             klawisz = getchar();
-            if (klawisz == 's' || klawisz == 'S') {}
+            char bufor[100];
+            if (klawisz == 's' || klawisz == 'S') zapisaniePliku();
             else if (klawisz == 'q' || klawisz == 'Q') {turnON = FALSE; break;}
-            
 
+            HOMEMode = FALSE;
+            
         }
         usleep(10000);
     }
@@ -183,8 +201,7 @@ void * pisanieWPliku(void * arg)
             for (int i = aktualnyZnak-1; i > 0; i--)
             {
                 if (plikWTablicy[i] == '\n') iloscPrzerwN++;
-                if (iloscPrzerwN == iloscLini/2  || i == 1 )
-                {
+                if (iloscPrzerwN == iloscLini/2  || i == 1 ) {
                     odKtoregoZaczacWypisywanie = i;
                     break;
                 }
@@ -203,12 +220,12 @@ void * pisanieWPliku(void * arg)
             for (int i = odKtoregoZaczacWypisywanie; iloscPrzerwN < iloscLini && i < rozmiarPliku ; i++ )
             {
                 if (plikWTablicy[i] == '\n') iloscPrzerwN++;
-                if (i == odKtoregoZaczacWypisywanie) pierwszyZdania = i;
+                if  (i == odKtoregoZaczacWypisywanie) pierwszyZdania = i;
 
                 if ((plikWTablicy[i] != ' ' && plikWTablicy[i] != '\n') && (plikWTablicy[i-1] == ' ' || plikWTablicy[i-1] == '\n')) pierwszyZdania = i;
                 else if ((plikWTablicy[i-1] != ' ' && plikWTablicy[i-1] != '\n') && (plikWTablicy[i] == ' ' || plikWTablicy[i] == '\n')) ostatniZdania = i;
 
-                if (pierwszyZdania != -1 && ostatniZdania != -1)
+                if (pierwszyZdania != -1 && ostatniZdania != -1 && ostatniZdania - pierwszyZdania > 0)
                 {
                     char slowoBoze[ostatniZdania - pierwszyZdania+1]; slowoBoze[ostatniZdania - pierwszyZdania] = 0;
                     for (int i = pierwszyZdania; i < ostatniZdania; i++) slowoBoze[i - pierwszyZdania] = plikWTablicy[i];
@@ -216,6 +233,8 @@ void * pisanieWPliku(void * arg)
                     char * tymczasowy = realloc(kolory, iloscKolorow);
                     kolory = tymczasowy;
                     kolory[iloscKolorow -1] = zwracanieKoloru(slowoBoze,sizeof(slowoBoze));
+                    
+                    //komentarz printf("%d %d: %s%c\n",iloscKolorow-1, ostatniZdania - pierwszyZdania,  slowoBoze,0);
                     pierwszyZdania = -1; ostatniZdania = -1;
                 }
                 
@@ -223,34 +242,43 @@ void * pisanieWPliku(void * arg)
                    
             //koniecTymczasowegoWybieraniaKolorow
 
+            //komentarz for (int bb = 1; bb < iloscKolorow; bb++ ) printf(" %d ", kolory[bb]);
+            //komentarz printf("\n %d \n",iloscKolorow);
+
             iloscPrzerwN = 0;
-            int ktoreSlowo = 1;
+            int ktoreSlowo = 0;
             char czyBylKomentarz = FALSE;
+
+            kolory[0] = 0;
 
             for (int i = odKtoregoZaczacWypisywanie; iloscPrzerwN < iloscLini && i < rozmiarPliku; i++ )
             {
                 printf("\033[0m");
-                if ((plikWTablicy[i] != ' ' && plikWTablicy[i] != '\n') && (plikWTablicy[i-1] == ' ' || plikWTablicy[i-1] == '\n')) ktoreSlowo++;   
+                if ((plikWTablicy[i] != ' ' && plikWTablicy[i] != '\n') && (plikWTablicy[i-1] == ' ' || plikWTablicy[i-1] == '\n') || (i == odKtoregoZaczacWypisywanie && plikWTablicy[i] != '\n' && plikWTablicy[i] != ' ') ) 
+                {
+                    ktoreSlowo++;
+                    //komentarz printf("%d",ktoreSlowo);
+                }   
                 if (i == aktualnyZnak) printf("\033[1;36m|\033[0m");
 
 
-                char kolor = kolory[ktoreSlowo];
+                char kolor = kolory[ktoreSlowo]; 
 
-                if (kolor == '/' || czyBylKomentarz)      {printf("\033[0;37m%c", plikWTablicy[i+1]); czyBylKomentarz = TRUE;}
-                else if (kolor == 'n') printf("\033[0;34m%c", plikWTablicy[i]);
-                else if (kolor == 'f') printf("\033[1;35m%c", plikWTablicy[i]);
-                else if (kolor == 'z') printf("\033[1;33m%c", plikWTablicy[i]);
-                else printf("%c",plikWTablicy[i]);
-                
-
-                printf("\033[0m");
-                if (plikWTablicy[i] == '\n' || i == odKtoregoZaczacWypisywanie) 
+                if (plikWTablicy[i] == '\n')
                 {
                     czyBylKomentarz = FALSE;
-                    iloscPrzerwN++;
+                    printf("\n");
                     for (int i = 4 - ileCyfr(iloscPrzerwN + aktualnaLiniaWWypisywaniu); i >= 0; i--  ) printf(" ");
-                    printf("\033[32m%d |",iloscPrzerwN + aktualnaLiniaWWypisywaniu);
-                
+                    printf("\033[32m%d |",  iloscPrzerwN + aktualnaLiniaWWypisywaniu);
+                    iloscPrzerwN++;
+                }
+                else
+                {
+                    if (kolor == '/' || czyBylKomentarz)      {printf("\033[0;37m%c", plikWTablicy[i]); czyBylKomentarz = TRUE;}
+                    else if (kolor == 'n') printf("\033[0;34m%c", plikWTablicy[i]);
+                    else if (kolor == 'f') printf("\033[1;35m%c", plikWTablicy[i]);
+                    else if (kolor == 'z') printf("\033[1;33m%c", plikWTablicy[i]);
+                    else printf("\033[0m%c",plikWTablicy[i]);
                 }
             }
 
@@ -275,9 +303,12 @@ int main(int argc, char *qrgv[])
         for (byte i = 0; i < rozmiar; i++) pierwszyArgument[i] = qrgv[1][i];
         plikKodu = fopen(pierwszyArgument, "r");
         czyPrzyOtwarciuZostalWybrany = TRUE;
-        plikWybranyPrzyOtwarciu = malloc(sizeof(pierwszyArgument)+1 * sizeof(char) );
-        for (int i = 1; i < sizeof(pierwszyArgument)+1; i++) plikWybranyPrzyOtwarciu[i] = pierwszyArgument[i-1];
+        plikWybranyPrzyOtwarciu = malloc(sizeof(pierwszyArgument) * sizeof(char) );
+        for (int i = 0; i < sizeof(pierwszyArgument); i++) plikWybranyPrzyOtwarciu[i] = pierwszyArgument[i];
+        printf("%s\n",plikWybranyPrzyOtwarciu);
     }
+
+    
 
     if (czyPrzyOtwarciuZostalWybrany) {
         fseek(plikKodu, 0, SEEK_END);
@@ -287,8 +318,7 @@ int main(int argc, char *qrgv[])
 
     plikWTablicy = malloc(rozmiarPliku);
 
-    if (czyPrzyOtwarciuZostalWybrany) for (int i = 1; i < rozmiarPliku; i++)
-    {
+    if (czyPrzyOtwarciuZostalWybrany) for (int i = 1; i < rozmiarPliku; i++) {
         fseek(plikKodu, i-1, 0);
         plikWTablicy[i] = fgetc(plikKodu);
     }
@@ -300,7 +330,6 @@ int main(int argc, char *qrgv[])
     pthread_create(&plikT,NULL,*pisanieWPliku,NULL);
     pthread_join(input,NULL);
     pthread_join(plikT,NULL); 
-
     free(plikWybranyPrzyOtwarciu);
     free(plikWTablicy);
     fclose(plikKodu);
